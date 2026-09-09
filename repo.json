@@ -1,0 +1,14 @@
+{
+  "name": "My Manga Repo",
+  "plugins": [
+    {
+      "id": "batcave-biz",
+      "name": "Batcave",
+      "version": "1.0.0",
+      "lang": "en",
+      "nsfw": false,
+      "icon": "https://batcave.biz/favicon.ico",
+      "entry": "batcave.plugin.js"
+    }
+  ]
+}
