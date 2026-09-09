@@ -1,5 +1,5 @@
 // Harbor plugin for ReadAllComics
-const BASE = "https://readallcomics.com";
+const BASE = "https://readallcomics.net";
 
 const HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -8,7 +8,7 @@ const HEADERS = {
 };
 
 async function getDoc(path) {
-  const url = path.startsWith("http") ? path : BASE + path;
+  const url = path.startsWith("http") ? path : BASE + (path.startsWith("/") ? path : "/" + path);
   const res = await harbor.http(url, { responseType: "text", headers: HEADERS });
   if (!res.ok) throw new Error("HTTP " + res.status + " for " + path);
   return harbor.parseHtml(res.body);
@@ -22,35 +22,40 @@ function abs(url) {
   return BASE + "/" + url;
 }
 
+function cleanSlug(url) {
+  if (!url) return "";
+  return url.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, "");
+}
+
 const plugin = {
   id: "readallcomics",
   name: "ReadAllComics",
 
   // Catalogo Popolari / Homepage
   async popular(offset, tagId) {
-    const doc = await getDoc("/");
-    
-    // Seleziona tutti i link ai fumetti presenti nella lista/sidebar della home
-    const links = doc.querySelectorAll("ul.story-list li a, .story-grid a, article a, .list-story a");
+    const page = Math.floor(offset / 20) + 1;
+    const path = page === 1 ? "/" : `/page/${page}/`;
+    const doc = await getDoc(path);
+
+    const items = doc.querySelectorAll("article, .post, .story, .list-story li");
     const results = [];
     const seen = new Set();
 
-    for (const a of links) {
-      const href = a.attr("href") || "";
-      const title = a.text()?.trim() || a.attr("title") || "";
+    for (const el of items) {
+      const a = el.querySelector("a");
+      const img = el.querySelector("img");
+      const title = (a?.attr("title") || a?.text() || el.querySelector("h2, h3, .title")?.text() || "").trim();
+      const href = a?.attr("href") || "";
 
-      if (!href || seen.has(href) || !title || title.length < 2) continue;
-      // Esclude link di navigazione o categorie
-      if (href.includes("/category/") || href.includes("/page/") || href === BASE || href === BASE + "/") continue;
-      
+      if (!href || !title || seen.has(href)) continue;
+      if (href.includes("/category/") || href === BASE || href === BASE + "/") continue;
+
       seen.add(href);
 
-      const cleanId = href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, "");
-
       results.push({
-        id: cleanId,
+        id: cleanSlug(href),
         title: title,
-        cover: undefined
+        cover: abs(img?.attr("src") || img?.attr("data-src"))
       });
     }
 
@@ -59,28 +64,28 @@ const plugin = {
 
   // Ricerca Fumetti
   async search(query, offset, tagId) {
-    const path = `/?story=${encodeURIComponent(query)}&s=${encodeURIComponent(query)}`;
+    const path = `/?s=${encodeURIComponent(query)}`;
     const doc = await getDoc(path);
 
-    const links = doc.querySelectorAll("ul.story-list li a, .search-story a, article a, li a");
+    const items = doc.querySelectorAll("article, .post, .story, ul.story-list li, .search-story");
     const results = [];
     const seen = new Set();
 
-    for (const a of links) {
-      const href = a.attr("href") || "";
-      const title = a.text()?.trim() || a.attr("title") || "";
+    for (const el of items) {
+      const a = el.querySelector("a");
+      const img = el.querySelector("img");
+      const title = (a?.attr("title") || a?.text() || el.querySelector("h2, h3, .title")?.text() || "").trim();
+      const href = a?.attr("href") || "";
 
-      if (!href || seen.has(href) || !title) continue;
-      if (href.includes("/category/") || href === BASE) continue;
-      
+      if (!href || !title || seen.has(href)) continue;
+      if (href.includes("/category/")) continue;
+
       seen.add(href);
 
-      const cleanId = href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, "");
-
       results.push({
-        id: cleanId,
+        id: cleanSlug(href),
         title: title,
-        cover: undefined
+        cover: abs(img?.attr("src") || img?.attr("data-src"))
       });
     }
 
@@ -90,22 +95,22 @@ const plugin = {
   // Dettagli Fumetto
   async detail(id) {
     const doc = await getDoc("/" + id);
-    const title = doc.querySelector("h1, .entry-title, .story-info h1")?.text()?.trim() || id;
-    const img = doc.querySelector(".description img, article img, .entry-content img, .story-info img");
+    const title = doc.querySelector("h1, .entry-title")?.text()?.trim() || id;
+    const img = doc.querySelector(".entry-content img, article img, .description img");
 
     return {
       id,
       title,
-      cover: abs(img?.attr("src")),
-      description: doc.querySelector(".description, .entry-content, p")?.text()?.trim() || "ReadAllComics Source",
+      cover: abs(img?.attr("src") || img?.attr("data-src")),
+      description: doc.querySelector(".entry-content, .description, p")?.text()?.trim() || "ReadAllComics Source",
       status: "Ongoing"
     };
   },
 
-  // Lista Capitoli
+  // Lista Capitoli / Albi
   async chapters(id) {
     const doc = await getDoc("/" + id);
-    const links = doc.querySelectorAll("ul.list-story li a, .entry-content a, .story-list a");
+    const links = doc.querySelectorAll(".entry-content a, ul.list-story li a, .story-list a");
     const chapters = [];
     const seen = new Set();
 
@@ -114,14 +119,13 @@ const plugin = {
       const text = a.text()?.trim() || "";
 
       if (!href || seen.has(href)) continue;
-      if (href.includes("/category/")) continue;
+      if (href.includes("/category/") || href.includes("/tag/")) continue;
 
       seen.add(href);
       const numMatch = text.match(/#?(\d+(\.\d+)?)/);
-      const cleanId = href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, "");
 
       chapters.push({
-        id: cleanId,
+        id: cleanSlug(href),
         chapter: numMatch ? numMatch[1] : null,
         title: text || id,
         language: "en"
@@ -131,13 +135,13 @@ const plugin = {
     return chapters;
   },
 
-  // Pagine / Immagini
+  // Estrazione Pagine / Immagini
   async pageUrls(chapterId) {
     const res = await harbor.http(BASE + "/" + chapterId, { responseType: "text", headers: HEADERS });
     if (!res.ok) return [];
 
     const doc = harbor.parseHtml(res.body);
-    const images = doc.querySelectorAll(".page-container img, article img, .entry-content img, img");
+    const images = doc.querySelectorAll(".entry-content img, article img, .page-container img, img");
 
     const urls = images
       .map((img) => abs(img.attr("src") || img.attr("data-src")))
@@ -145,6 +149,7 @@ const plugin = {
 
     if (urls.length > 0) return urls;
 
+    // Fallback con Regex se le immagini sono iniettate via script
     const matches = [...res.body.matchAll(/https?:\/\/[^"'`\s]+\.(?:jpg|jpeg|png|webp)/gi)];
     return [...new Set(matches.map((m) => m[0]).filter((url) => !url.includes("logo") && !url.includes("banner")))];
   },
