@@ -1,13 +1,14 @@
 {
-  "name": "Harbor Plugins Repo",
+  "name": "My Manga Repo",
   "plugins": [
     {
       "id": "readallcomics",
       "name": "ReadAllComics",
       "version": "1.0.0",
-      "description": "Fumetti Marvel, DC, Image e Indie senza blocchi Cloudflare.",
+      "lang": "en",
+      "nsfw": false,
       "icon": "https://readallcomics.com/favicon.ico",
-      "script": "readallcomics.js"
+      "entry": "readallcomics.js"
     }
   ]
 }
