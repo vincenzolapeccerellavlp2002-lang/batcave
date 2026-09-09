@@ -1,14 +1,13 @@
 {
-  "name": "My Manga Repo",
+  "name": "Harbor Plugins Repo",
   "plugins": [
     {
-      "id": "batcave-biz",
-      "name": "Batcave",
+      "id": "readallcomics",
+      "name": "ReadAllComics",
       "version": "1.0.0",
-      "lang": "en",
-      "nsfw": false,
-      "icon": "https://batcave.biz/favicon.ico",
-      "entry": "batcave.js"
+      "description": "Fumetti Marvel, DC, Image e Indie senza blocchi Cloudflare.",
+      "icon": "https://readallcomics.com/favicon.ico",
+      "script": "readallcomics.js"
     }
   ]
 }
