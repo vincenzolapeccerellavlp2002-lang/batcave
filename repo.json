@@ -8,7 +8,7 @@
       "lang": "en",
       "nsfw": false,
       "icon": "https://batcave.biz/favicon.ico",
-      "entry": "batcave.plugin.js"
+      "entry": "batcave.js"
     }
   ]
 }
