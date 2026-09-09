@@ -5,10 +5,27 @@
       "id": "readallcomics",
       "name": "ReadAllComics",
       "version": "1.0.0",
+      "description": "Fumetti Marvel, DC e Indie in inglese",
+      "type": "manga",
       "lang": "en",
       "nsfw": false,
       "icon": "https://readallcomics.com/favicon.ico",
-      "entry": "readallcomics.js"
+      "entry": "readallcomics.js",
+      "script": "readallcomics.js"
+    }
+  ],
+  "sources": [
+    {
+      "id": "readallcomics",
+      "name": "ReadAllComics",
+      "version": "1.0.0",
+      "description": "Fumetti Marvel, DC e Indie in inglese",
+      "type": "manga",
+      "lang": "en",
+      "nsfw": false,
+      "icon": "https://readallcomics.com/favicon.ico",
+      "entry": "readallcomics.js",
+      "script": "readallcomics.js"
     }
   ]
 }
