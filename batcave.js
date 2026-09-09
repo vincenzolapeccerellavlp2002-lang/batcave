@@ -1,6 +1,4 @@
 // Harbor manga source plugin for batcave.biz
-// Runs in Harbor JS engine (harbor.http, harbor.parseHtml)
-
 const BASE = "https://batcave.biz";
 
 async function getDoc(path) {
@@ -96,7 +94,6 @@ const plugin = {
     const res = await harbor.http(BASE + "/" + chapterId, { responseType: "text" });
     if (!res.ok) throw new Error("http " + res.status + " for chapter " + chapterId);
 
-    // 1. Try DOM scraping directly if <img> tags are rendered
     const doc = harbor.parseHtml(res.body);
     const domPages = doc
       .querySelectorAll(".reader-images img, .chapter-content img")
@@ -105,7 +102,6 @@ const plugin = {
 
     if (domPages.length > 0) return domPages;
 
-    // 2. Script Regex Fallback (extracts array strings or image URLs embedded in JS variables)
     const matches = [...res.body.matchAll(/https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/gi)];
     if (matches.length > 0) {
       const urls = matches
@@ -129,3 +125,6 @@ const plugin = {
       .filter((t) => t.id && t.name);
   },
 };
+
+// Necessario affinché Harbor riceva l'oggetto del plugin
+return plugin;
