@@ -3,7 +3,8 @@ const BASE = "https://readallcomics.com";
 
 const HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  "Referer": BASE + "/"
+  "Referer": BASE + "/",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 };
 
 async function getDoc(path) {
@@ -25,27 +26,31 @@ const plugin = {
   id: "readallcomics",
   name: "ReadAllComics",
 
-  // Catalogo/Popolari
+  // Catalogo Popolari / Homepage
   async popular(offset, tagId) {
-    const page = Math.floor(offset / 24) + 1;
-    const path = page === 1 ? "/" : `/page/${page}/`;
-    const doc = await getDoc(path);
-
-    const items = doc.querySelectorAll(".post-story, article, .story-grid .story");
+    const doc = await getDoc("/");
+    
+    // Seleziona tutti i link ai fumetti presenti nella lista/sidebar della home
+    const links = doc.querySelectorAll("ul.story-list li a, .story-grid a, article a, .list-story a");
     const results = [];
+    const seen = new Set();
 
-    for (const el of items) {
-      const a = el.querySelector("a");
-      const img = el.querySelector("img");
-      const title = a?.attr("title") || el.querySelector(".story-name, h2, h3")?.text()?.trim() || "";
-      const href = a?.attr("href") || "";
+    for (const a of links) {
+      const href = a.attr("href") || "";
+      const title = a.text()?.trim() || a.attr("title") || "";
 
-      if (!href || !title) continue;
+      if (!href || seen.has(href) || !title || title.length < 2) continue;
+      // Esclude link di navigazione o categorie
+      if (href.includes("/category/") || href.includes("/page/") || href === BASE || href === BASE + "/") continue;
+      
+      seen.add(href);
+
+      const cleanId = href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, "");
 
       results.push({
-        id: href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, ""),
+        id: cleanId,
         title: title,
-        cover: abs(img?.attr("src") || img?.attr("data-src"))
+        cover: undefined
       });
     }
 
@@ -57,7 +62,7 @@ const plugin = {
     const path = `/?story=${encodeURIComponent(query)}&s=${encodeURIComponent(query)}`;
     const doc = await getDoc(path);
 
-    const links = doc.querySelectorAll("ul.story-list li a, .search-story a, article a");
+    const links = doc.querySelectorAll("ul.story-list li a, .search-story a, article a, li a");
     const results = [];
     const seen = new Set();
 
@@ -66,10 +71,14 @@ const plugin = {
       const title = a.text()?.trim() || a.attr("title") || "";
 
       if (!href || seen.has(href) || !title) continue;
+      if (href.includes("/category/") || href === BASE) continue;
+      
       seen.add(href);
 
+      const cleanId = href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, "");
+
       results.push({
-        id: href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, ""),
+        id: cleanId,
         title: title,
         cover: undefined
       });
@@ -81,36 +90,40 @@ const plugin = {
   // Dettagli Fumetto
   async detail(id) {
     const doc = await getDoc("/" + id);
-    const title = doc.querySelector("h1, .entry-title")?.text()?.trim() || id;
-    const img = doc.querySelector(".description img, article img, .entry-content img");
+    const title = doc.querySelector("h1, .entry-title, .story-info h1")?.text()?.trim() || id;
+    const img = doc.querySelector(".description img, article img, .entry-content img, .story-info img");
 
     return {
       id,
       title,
       cover: abs(img?.attr("src")),
-      description: doc.querySelector(".description, .entry-content, p")?.text()?.trim() || "Nessuna descrizione disponibile.",
+      description: doc.querySelector(".description, .entry-content, p")?.text()?.trim() || "ReadAllComics Source",
       status: "Ongoing"
     };
   },
 
-  // Lista Capitoli / Albi
+  // Lista Capitoli
   async chapters(id) {
     const doc = await getDoc("/" + id);
-    const links = doc.querySelectorAll("ul.list-story li a, .entry-content a[href*='readallcomics.com']");
+    const links = doc.querySelectorAll("ul.list-story li a, .entry-content a, .story-list a");
     const chapters = [];
+    const seen = new Set();
 
     for (const a of links) {
       const href = a.attr("href") || "";
       const text = a.text()?.trim() || "";
 
-      if (!href) continue;
+      if (!href || seen.has(href)) continue;
+      if (href.includes("/category/")) continue;
 
+      seen.add(href);
       const numMatch = text.match(/#?(\d+(\.\d+)?)/);
+      const cleanId = href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, "");
 
       chapters.push({
-        id: href.replace(/^https?:\/\/[^\/]+/, "").replace(/^\//, "").replace(/\/$/, ""),
+        id: cleanId,
         chapter: numMatch ? numMatch[1] : null,
-        title: text || title,
+        title: text || id,
         language: "en"
       });
     }
@@ -118,21 +131,20 @@ const plugin = {
     return chapters;
   },
 
-  // Estrazione Pagine / Immagini
+  // Pagine / Immagini
   async pageUrls(chapterId) {
     const res = await harbor.http(BASE + "/" + chapterId, { responseType: "text", headers: HEADERS });
     if (!res.ok) return [];
 
     const doc = harbor.parseHtml(res.body);
-    const images = doc.querySelectorAll(".page-container img, article img, .entry-content img");
+    const images = doc.querySelectorAll(".page-container img, article img, .entry-content img, img");
 
     const urls = images
       .map((img) => abs(img.attr("src") || img.attr("data-src")))
-      .filter((src) => src && !src.includes("logo") && !src.includes("banner") && !src.includes("avatar"));
+      .filter((src) => src && (src.includes(".jpg") || src.includes(".png") || src.includes(".webp")) && !src.includes("logo") && !src.includes("banner") && !src.includes("avatar"));
 
     if (urls.length > 0) return urls;
 
-    // Fallback con espressione regolare se le immagini sono iniettate via script
     const matches = [...res.body.matchAll(/https?:\/\/[^"'`\s]+\.(?:jpg|jpeg|png|webp)/gi)];
     return [...new Set(matches.map((m) => m[0]).filter((url) => !url.includes("logo") && !url.includes("banner")))];
   },
